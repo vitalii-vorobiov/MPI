@@ -70,19 +70,30 @@ int main(int argc, char *argv[]) {
         double start_y = c->get_double("y_start");
         double end_y = c->get_double("y_end");
 
-        double x = (end_x - start_x) / commsize - 1;
+        double x = (end_x - start_x) / (commsize - 1);
 
         for (int i = 1; i < commsize; ++i) {
-            start_x = start_x + x * (i+1);
-            end_x = start_x + x * (i + 2);
+            double start_x_send = start_x + x * (i-1);
+            double end_x_send = start_x + x * i;
 
             MPI_Send(&err_abs, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
             MPI_Send(&err_rel, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
-            MPI_Send(&start_x, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
-            MPI_Send(&end_x, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&start_x_send, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&end_x_send, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
             MPI_Send(&start_y, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
             MPI_Send(&end_y, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
         }
+
+        double res = 0;
+
+        for (int j = 1; j < commsize; ++j) {
+            double recv_res;
+
+            MPI_Recv(&recv_res, 1, MPI_DOUBLE, j, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+            res += recv_res;
+        }
+
+        std::cout << "Res: " << std::setprecision(7) << res << std::endl;
     }
 
     if (rank > 0) {
@@ -101,16 +112,13 @@ int main(int argc, char *argv[]) {
         MPI_Recv(&start_y, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         MPI_Recv(&end_y, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
-        std::cout << rank << " " << start_x << " " << end_x << std::endl;
-
         while (!(std::abs(prev - now) <= err_abs && std::abs(prev - now) / prev <= err_rel)) {
             precision /= 2;
             prev = now;
             now = runner(precision, start_x, end_x, start_y, end_y);
         }
 
-        std::cout << rank << " " << now << std::endl;
-
+        MPI_Send(&now, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD);
     }
 
     MPI_Finalize();
