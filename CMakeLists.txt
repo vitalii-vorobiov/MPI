@@ -3,4 +3,4 @@ project(MPI)
 
 set(CMAKE_CXX_STANDARD 14)
 
-add_executable(MPI main.cpp)
+add_executable(MPI main.cpp time_measure.h config_reader.h)

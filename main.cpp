@@ -1,16 +1,117 @@
+//
+// Created by vitaliyvorobyov on 25.05.19.
+//
+
+#include <iostream>
+#include <cmath>
+#include <thread>
+#include <atomic>
+#include <iomanip>
+#include <vector>
 #include <stdio.h>
 #include <mpi.h>
+#include "config_reader.h"
+#include "time_measure.h"
+
+double f (double x1, double x2)
+{
+    double a = 20;
+    double b = 0.2;
+    double c = 2 * M_PI;
+    return -a * exp(-b * sqrt(0.5 * (x1 * x1 + x2 * x2))) - exp(0.5 * (cos(c * x1) + cos(c * x2))) + a + exp(1);
+}
+
+double integral (double x_from, double x_to, double y_from, double y_to, double precision, std::atomic<double> &res)
+{
+    double local_res = 0;
+    double x = x_from;
+    while (x <= x_to) {
+        double y = y_from;
+        while (y <= y_to) {
+            local_res += f(x, y);
+            y += precision;
+        }
+        x += precision;
+    }
+
+    res = res + local_res;
+}
+
+double runner (double precission, double start_x, double end_x, double start_y, double end_y)
+{
+    std::atomic<double> res{0};
+
+    integral(start_x, end_x, start_y, end_y, precission, std::ref(res));
+
+    return res * precission * precission;
+}
 
 int main(int argc, char *argv[]) {
     int commsize, rank, len;
     char procname[MPI_MAX_PROCESSOR_NAME];
+
+    double prev = 99;
+    double now = -99;
+    double precision = 0.4;
 
     MPI_Init(&argc, &argv);
     MPI_Comm_size(MPI_COMM_WORLD, &commsize);
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
     MPI_Get_processor_name(procname, &len);
 
-    printf("Hello, MPI World! Process %d of %d on node %s.\n",rank, commsize, procname);
+    if (rank == 0) {
+
+        config *c = new config("config.dat");
+
+        double err_abs = c->get_double("err_abs");
+        double err_rel = c->get_double("err_rel");
+        double start_x = c->get_double("x_start");
+        double end_x = c->get_double("x_end");
+        double start_y = c->get_double("y_start");
+        double end_y = c->get_double("y_end");
+
+        double x = (end_x - start_x) / commsize - 1;
+
+        for (int i = 1; i < commsize; ++i) {
+            start_x = start_x + x * (i+1);
+            end_x = start_x + x * (i + 2);
+
+            MPI_Send(&err_abs, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&err_rel, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&start_x, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&end_x, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&start_y, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+            MPI_Send(&end_y, 1, MPI_DOUBLE, i, 0, MPI_COMM_WORLD);
+        }
+    }
+
+    if (rank > 0) {
+
+        double err_abs;
+        double err_rel;
+        double start_x;
+        double end_x;
+        double start_y;
+        double end_y;
+
+        MPI_Recv(&err_abs, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&err_rel, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&start_x, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&end_x, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&start_y, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Recv(&end_y, 1, MPI_DOUBLE, 0, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        std::cout << rank << " " << start_x << " " << end_x << std::endl;
+
+        while (!(std::abs(prev - now) <= err_abs && std::abs(prev - now) / prev <= err_rel)) {
+            precision /= 2;
+            prev = now;
+            now = runner(precision, start_x, end_x, start_y, end_y);
+        }
+
+        std::cout << rank << " " << now << std::endl;
+
+    }
 
     MPI_Finalize();
     return 0;
