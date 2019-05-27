@@ -5,10 +5,7 @@
 #include <iostream>
 #include <cmath>
 #include <thread>
-#include <atomic>
 #include <iomanip>
-#include <vector>
-#include <stdio.h>
 #include <mpi.h>
 #include "config_reader.h"
 #include "time_measure.h"
