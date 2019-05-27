@@ -8,6 +8,17 @@
 
 **client2** - Intel(R)	Core(TM) i7-7820HQ CPU @ 2.9GHz, 1 physical core, L1 Cache 32KIB, L2 Cache, 256 KIB, L3 Cache 8MIB, DIMM LPDDR3 Synchronous 2133 MHz 2x8GB
 
+# Run
+
+Compile
+```
+mpic++ main.cpp -o main
+```
+Run
+```
+mpirun -np <number of hosts> --hostfile hosts main
+```
+
 # Results
 
 Only for computing computers (one **localhost** always reads config and sends info to others)
