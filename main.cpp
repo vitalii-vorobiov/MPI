@@ -61,6 +61,8 @@ int main(int argc, char *argv[]) {
 
     if (rank == 0) {
 
+        auto start = get_current_time_fenced();
+
         config *c = new config("config.dat");
 
         double err_abs = c->get_double("err_abs");
@@ -93,7 +95,11 @@ int main(int argc, char *argv[]) {
             res += recv_res;
         }
 
+        auto end = get_current_time_fenced();
+
         std::cout << "Res: " << std::setprecision(7) << res << std::endl;
+        std::cout << "Time in us: " << to_us(end - start) << std::endl;
+        std::cout << "Time in sec: " << to_us(end - start) / 1000000 << std::endl;
     }
 
     if (rank > 0) {
